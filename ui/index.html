@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tauri ZIP Viewer</title>
+</head>
+<body>
+  <h1>Tauri ZIP Viewer</h1>
+  <input type="file" id="zipFileInput" accept=".zip" />
+  <button id="listFilesButton">List Files</button>
+  <ul id="fileList"></ul>
+
+  <script type="module">
+    const invoke = window.__TAURI__.invoke
+
+    document.getElementById('listFilesButton').addEventListener('click', async () => {
+      const input = document.getElementById('zipFileInput');
+      if (input.files.length === 0) {
+        alert('Please select a ZIP file');
+        return;
+      }
+
+      const file = input.files[0];
+      const reader = new FileReader();
+
+      reader.onload = async function(event) {
+        const arrayBuffer = event.target.result;
+        const byteArray = new Uint8Array(arrayBuffer);
+
+        try {
+          console.log('Sending file contents to Rust backend');
+          const fileNames = await invoke('list_zip_file_names', { fileContents: [...byteArray] });
+          console.log('Received file names from Rust backend:', fileNames);
+          const fileList = document.getElementById('fileList');
+          fileList.innerHTML = '';
+          fileNames.forEach(name => {
+            const li = document.createElement('li');
+            li.textContent = name;
+            fileList.appendChild(li);
+          });
+        } catch (error) {
+          console.error('Failed to list files:', error);
+          alert(`Failed to list files: ${error}`);
+        }
+      };
+
+      reader.readAsArrayBuffer(file);
+    });
+
+  </script>
+</body>
+</html>
