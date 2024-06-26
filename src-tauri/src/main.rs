@@ -2,6 +2,7 @@
 
 use std::io::Cursor;
 use tauri::{generate_handler, Builder};
+use zip::result::ZipError;
 use zip::ZipArchive;
 
 #[tauri::command]
@@ -26,6 +27,14 @@ fn list_zip_file_names(file_contents: Vec<u8>, password: String) -> Result<Vec<S
             Ok(file) => {
                 println!("Found file: {}", file.name());
                 file_names.push(file.name().to_string());
+            },
+            Err(ZipError::UnsupportedArchive(msg)) if msg == "Password required to decrypt file" => {
+                println!("Password required to decrypt file");
+                return Err("Password required to decrypt file".to_string());
+            },
+            Err(ZipError::InvalidPassword) => {
+                println!("Invalid password");
+                return Err("Invalid password".to_string());
             },
             Err(e) => {
                 println!("Failed to access file in ZIP archive: {}", e);

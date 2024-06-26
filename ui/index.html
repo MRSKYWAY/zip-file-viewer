@@ -4,15 +4,40 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tauri ZIP Viewer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+    }
+    .section {
+      margin-bottom: 20px;
+    }
+    .section h2 {
+      margin-bottom: 10px;
+    }
+    #fileList {
+      margin-top: 20px;
+    }
+  </style>
 </head>
 <body>
   <h1>Tauri ZIP Viewer</h1>
-  <input type="file" id="zipFileInput" />
-  <button id="listFilesButton">List Files</button>
-  <ul id="fileList"></ul>
+  <div class="section">
+    <input type="file" id="zipFileInput" />
+    <button id="listFilesButton">List Files</button>
+  </div>
+  <div class="section">
+    <h2>Recent Files</h2>
+    <ul id="recentFilesList"></ul>
+  </div>
+  <div class="section">
+    <h2>File Contents</h2>
+    <ul id="fileList"></ul>
+  </div>
 
   <script>
     const invoke = window.__TAURI__.invoke;
+    const RECENT_FILES_KEY = 'recentFiles';
+    const MAX_RECENT_FILES = 5;
 
     document.getElementById('listFilesButton').addEventListener('click', async () => {
       const input = document.getElementById('zipFileInput');
@@ -22,6 +47,8 @@
       }
 
       const file = input.files[0];
+      const filePath = file.name; // Get the file name
+
       console.log('Selected file:', file);
 
       const uint8Array = await file.arrayBuffer().then(buffer => new Uint8Array(buffer));
@@ -42,17 +69,86 @@
             li.textContent = name;
             fileList.appendChild(li);
           });
+
+          // Add to recent files
+          addRecentFile(filePath);
+
           break;
         } catch (error) {
           console.error('Failed to list files:', error);
-          password = prompt('Failed to list files. Please enter the ZIP file password:');
-          if (!password) {
-            alert('Password is required to list files.');
-            continue;
+          password = prompt('Failed to list files. Please enter the ZIP file password:', '');
+          if (password === null) {
+            alert('Password entry cancelled. Returning to home.');
+            return;
           }
         }
       }
     });
+
+    function addRecentFile(filePath) {
+      let recentFiles = JSON.parse(localStorage.getItem(RECENT_FILES_KEY)) || [];
+      // Remove the file if it's already in the list
+      recentFiles = recentFiles.filter(file => file !== filePath);
+      // Add the new file to the beginning
+      recentFiles.unshift(filePath);
+      // Keep only the latest MAX_RECENT_FILES entries
+      if (recentFiles.length > MAX_RECENT_FILES) {
+        recentFiles = recentFiles.slice(0, MAX_RECENT_FILES);
+      }
+      localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(recentFiles));
+      displayRecentFiles();
+    }
+
+    function displayRecentFiles() {
+      const recentFiles = JSON.parse(localStorage.getItem(RECENT_FILES_KEY)) || [];
+      const recentFilesList = document.getElementById('recentFilesList');
+      recentFilesList.innerHTML = '';
+      recentFiles.forEach(file => {
+        const li = document.createElement('li');
+        li.textContent = file;
+        li.addEventListener('click', () => openRecentFile(file));
+        recentFilesList.appendChild(li);
+      });
+    }
+
+    async function openRecentFile(filePath) {
+      console.log('Opening recent file:', filePath);
+      // Logic to handle opening recent file
+      const uint8Array = await fetch(filePath).then(res => res.arrayBuffer()).then(buffer => new Uint8Array(buffer));
+      password = ''
+      while (true) {
+        try {
+          console.log('Sending file contents to Rust backend');
+          const fileNames = await invoke('list_zip_file_names', {
+            fileContents: [...uint8Array],
+            password
+          });
+          console.log('Received file names from Rust backend:', fileNames);
+          const fileList = document.getElementById('fileList');
+          fileList.innerHTML = '';
+          fileNames.forEach(name => {
+            const li = document.createElement('li');
+            li.textContent = name;
+            fileList.appendChild(li);
+          });
+
+          // Add to recent files
+          addRecentFile(filePath);
+
+          break;
+        } catch (error) {
+          console.error('Failed to list files:', error);
+          password = prompt('Failed to list files. Please enter the ZIP file password:', '');
+          if (password === null) {
+            alert('Password entry cancelled. Returning to home.');
+            return;
+          }
+        }
+      }
+    }
+
+    // Display recent files on page load
+    displayRecentFiles();
   </script>
 </body>
 </html>
