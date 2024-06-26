@@ -7,12 +7,12 @@
 </head>
 <body>
   <h1>Tauri ZIP Viewer</h1>
-  <input type="file" id="zipFileInput" accept=".zip" />
+  <input type="file" id="zipFileInput" />
   <button id="listFilesButton">List Files</button>
   <ul id="fileList"></ul>
 
-  <script type="module">
-    const invoke = window.__TAURI__.invoke
+  <script>
+    const invoke = window.__TAURI__.invoke;
 
     document.getElementById('listFilesButton').addEventListener('click', async () => {
       const input = document.getElementById('zipFileInput');
@@ -22,15 +22,18 @@
       }
 
       const file = input.files[0];
-      const reader = new FileReader();
+      console.log('Selected file:', file);
 
-      reader.onload = async function(event) {
-        const arrayBuffer = event.target.result;
-        const byteArray = new Uint8Array(arrayBuffer);
+      const uint8Array = await file.arrayBuffer().then(buffer => new Uint8Array(buffer));
+      let password = '';
 
+      while (true) {
         try {
           console.log('Sending file contents to Rust backend');
-          const fileNames = await invoke('list_zip_file_names', { fileContents: [...byteArray] });
+          const fileNames = await invoke('list_zip_file_names', {
+            fileContents: [...uint8Array],
+            password
+          });
           console.log('Received file names from Rust backend:', fileNames);
           const fileList = document.getElementById('fileList');
           fileList.innerHTML = '';
@@ -39,15 +42,17 @@
             li.textContent = name;
             fileList.appendChild(li);
           });
+          break;
         } catch (error) {
           console.error('Failed to list files:', error);
-          alert(`Failed to list files: ${error}`);
+          password = prompt('Failed to list files. Please enter the ZIP file password:');
+          if (!password) {
+            alert('Password is required to list files.');
+            continue;
+          }
         }
-      };
-
-      reader.readAsArrayBuffer(file);
+      }
     });
-
   </script>
 </body>
 </html>

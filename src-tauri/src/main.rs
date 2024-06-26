@@ -1,12 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-
 use std::io::Cursor;
 use tauri::{generate_handler, Builder};
 use zip::ZipArchive;
 
 #[tauri::command]
-fn list_zip_file_names(file_contents: Vec<u8>) -> Result<Vec<String>, String> {
+fn list_zip_file_names(file_contents: Vec<u8>, password: String) -> Result<Vec<String>, String> {
     println!("Received file contents");
 
     let cursor = Cursor::new(file_contents);
@@ -23,7 +22,7 @@ fn list_zip_file_names(file_contents: Vec<u8>) -> Result<Vec<String>, String> {
 
     let mut file_names = Vec::new();
     for i in 0..archive.len() {
-        match archive.by_index(i) {
+        match archive.by_index_decrypt(i, password.as_bytes()) {
             Ok(file) => {
                 println!("Found file: {}", file.name());
                 file_names.push(file.name().to_string());
