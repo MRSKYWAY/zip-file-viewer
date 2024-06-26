@@ -5,8 +5,15 @@ use tauri::{generate_handler, Builder};
 use zip::result::ZipError;
 use zip::ZipArchive;
 
+#[derive(serde::Serialize)]
+struct FileDetails {
+    name: String,
+    size: u64,
+    compressed_size: u64,
+}
+
 #[tauri::command]
-fn list_zip_file_names(file_contents: Vec<u8>, password: String) -> Result<Vec<String>, String> {
+fn list_zip_file_names(file_contents: Vec<u8>, password: String) -> Result<Vec<FileDetails>, String> {
     println!("Received file contents");
 
     let cursor = Cursor::new(file_contents);
@@ -21,12 +28,17 @@ fn list_zip_file_names(file_contents: Vec<u8>, password: String) -> Result<Vec<S
         }
     };
 
-    let mut file_names = Vec::new();
+    let mut file_details = Vec::new();
     for i in 0..archive.len() {
         match archive.by_index_decrypt(i, password.as_bytes()) {
             Ok(file) => {
                 println!("Found file: {}", file.name());
-                file_names.push(file.name().to_string());
+                let details = FileDetails {
+                    name: file.name().to_string(),
+                    size: file.size(),
+                    compressed_size: file.compressed_size(),
+                };
+                file_details.push(details);
             },
             Err(ZipError::UnsupportedArchive(msg)) if msg == "Password required to decrypt file" => {
                 println!("Password required to decrypt file");
@@ -43,7 +55,7 @@ fn list_zip_file_names(file_contents: Vec<u8>, password: String) -> Result<Vec<S
         }
     }
 
-    Ok(file_names)
+    Ok(file_details)
 }
 
 fn main() {
