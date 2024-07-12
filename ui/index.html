@@ -6,156 +6,85 @@
   <title>Tauri ZIP Viewer</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: 'Roboto', sans-serif;
+      background-color: #f5f5f5;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      width: 100%;
+      max-width: 800px;
+    }
+    h1 {
+      font-size: 2em;
+      margin-bottom: 20px;
+      color: #0073e6;
     }
     .section {
       margin-bottom: 20px;
     }
     .section h2 {
       margin-bottom: 10px;
+      font-size: 1.5em;
+      color: #0073e6;
     }
-    #fileList {
-      margin-top: 20px;
+    .button {
+      background-color: #0073e6;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 1em;
+      transition: background-color 0.3s ease;
     }
-    .file-details {
-      margin-top: 10px;
-      font-size: 0.9em;
+    .button:hover {
+      background-color: #005bb5;
+    }
+    input[type="file"] {
+      margin-bottom: 10px;
+    }
+    ul {
+      list-style-type: none;
+      padding: 0;
+    }
+    li {
+      background-color: #f9f9f9;
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
   </style>
 </head>
 <body>
-  <h1>Tauri ZIP Viewer</h1>
-  <div class="section">
-    <input type="file" id="zipFileInput" />
-    <button id="listFilesButton">List Files</button>
+  <div class="container">
+    <h1>Tauri ZIP Viewer</h1>
+    <div class="section">
+      <input type="file" id="zipFileInput" />
+      <button id="listFilesButton" class="button">List Files</button>
+    </div>
+    <div class="section">
+      <h2>Recent Files</h2>
+      <ul id="recentFilesList"></ul>
+    </div>
+    <div class="section">
+      <h2>File Contents</h2>
+      <button id="clearFilesButton" class="button">Clear Results</button>
+      <ul id="fileList"></ul>
+    </div>
   </div>
-  <div class="section">
-    <h2>Recent Files</h2>
-    <ul id="recentFilesList"></ul>
-  </div>
-  <div class="section">
-    <h2>File Contents</h2>
-    <button id="clearFilesButton">Clear Results</button>
-    <ul id="fileList"></ul>
-  </div>
 
-  <script>
-    const invoke = window.__TAURI__.invoke;
-    const RECENT_FILES_KEY = 'recentFiles';
-    const MAX_RECENT_FILES = 5;
+  <script src="script.js"></script>
 
-    document.getElementById('listFilesButton').addEventListener('click', async () => {
-      const input = document.getElementById('zipFileInput');
-      if (input.files.length === 0) {
-        alert('Please select a ZIP file');
-        return;
-      }
-
-      const file = input.files[0];
-      const filePath = file.name; // Get the file name
-
-      console.log('Selected file:', file);
-
-      const uint8Array = await file.arrayBuffer().then(buffer => new Uint8Array(buffer));
-      let password = '';
-
-      while (true) {
-        try {
-          console.log('Sending file contents to Rust backend');
-          const fileDetails = await invoke('list_zip_file_names', {
-            fileContents: [...uint8Array],
-            password
-          });
-          console.log('Received file details from Rust backend:', fileDetails);
-          const fileList = document.getElementById('fileList');
-          fileList.innerHTML = '';
-          fileDetails.forEach(detail => {
-            const li = document.createElement('li');
-            li.textContent = `${detail.name} (Size: ${detail.size} bytes, Compressed Size: ${detail.compressed_size} bytes)`;
-            fileList.appendChild(li);
-          });
-
-          // Add to recent files
-          addRecentFile(filePath);
-
-          break;
-        } catch (error) {
-          console.error('Failed to list files:', error);
-          password = prompt('Failed to list files. Please enter the ZIP file password:', '');
-          if (password === null) {
-            alert('Password entry cancelled. Returning to home.');
-            return;
-          }
-        }
-      }
-    });
-
-    document.getElementById('clearFilesButton').addEventListener('click', () => {
-      const fileList = document.getElementById('fileList');
-      fileList.innerHTML = '';
-    });
-
-    function addRecentFile(filePath) {
-      let recentFiles = JSON.parse(localStorage.getItem(RECENT_FILES_KEY)) || [];
-      // Remove the file if it's already in the list
-      recentFiles = recentFiles.filter(file => file !== filePath);
-      // Add the new file to the beginning
-      recentFiles.unshift(filePath);
-      // Keep only the latest MAX_RECENT_FILES entries
-      if (recentFiles.length > MAX_RECENT_FILES) {
-        recentFiles = recentFiles.slice(0, MAX_RECENT_FILES);
-      }
-      localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(recentFiles));
-      displayRecentFiles();
-    }
-
-    function displayRecentFiles() {
-      const recentFiles = JSON.parse(localStorage.getItem(RECENT_FILES_KEY)) || [];
-      const recentFilesList = document.getElementById('recentFilesList');
-      recentFilesList.innerHTML = '';
-      recentFiles.forEach(file => {
-        const li = document.createElement('li');
-        li.textContent = file;
-        li.addEventListener('click', () => openRecentFile(file));
-        recentFilesList.appendChild(li);
-      });
-    }
-
-    async function openRecentFile(filePath) {
-      console.log('Opening recent file:', filePath);
-      // Logic to handle opening recent file
-      const uint8Array = await fetch(filePath).then(res => res.arrayBuffer()).then(buffer => new Uint8Array(buffer));
-      password = ''
-      while (true) {
-        try {
-          console.log('Sending file contents to Rust backend');
-          const fileDetails = await invoke('list_zip_file_names', {
-            fileContents: [...uint8Array],
-            password
-          });
-          console.log('Received file details from Rust backend:', fileDetails);
-          const fileList = document.getElementById('fileList');
-          fileList.innerHTML = '';
-          fileDetails.forEach(detail => {
-            const li = document.createElement('li');
-            li.textContent = `${detail.name} (Size: ${detail.size} bytes, Compressed Size: ${detail.compressed_size} bytes)`;
-            fileList.appendChild(li);
-          });
-
-          break;
-        } catch (error) {
-          console.error('Failed to list files:', error);
-          password = prompt('Failed to list files. Please enter the ZIP file password:', '');
-          if (password === null) {
-            alert('Password entry cancelled. Returning to home.');
-            return;
-          }
-        }
-      }
-    }
-
-    // Display recent files on page load
-    displayRecentFiles();
-  </script>
 </body>
 </html>
